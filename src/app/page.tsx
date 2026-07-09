@@ -165,9 +165,9 @@ const DRIVER_POOL: DriverInfo[] = [
     id: "d6",
     name: "Lewis Hamilton",
     nationality: "United Kingdom",
-    stats: { pace: 92, consistency: 96, tyreManagement: 98 },
-    wage: 24,
-    morale: 82,
+    stats: { pace: 95, consistency: 96, tyreManagement: 98 },
+    wage: 25,
+    morale: 86,
     contractRounds: 14,
   },
   {
@@ -692,7 +692,7 @@ function NewCareerScreen({ onBack, onConfirm }: { onBack: () => void; onConfirm:
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="e.g. Ironbark Racing"
+        placeholder="e.g. Kookie's Racing"
         maxLength={24}
         className={`${bebas.className} w-full text-3xl uppercase tracking-wide bg-transparent border-b-2 px-1 py-2 mb-8 outline-none`}
         style={{ borderColor: PALETTE.ink, color: PALETTE.ink }}
