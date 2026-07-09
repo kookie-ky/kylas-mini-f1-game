@@ -310,83 +310,17 @@ const TRACKS: Track[] = [
   { id: "bra", name: "Interlagos Circuit", country: "Brazil", laps: 71 },
 ];
 
-const RIVAL_TEAM_NAMES: {
-  name: string;
-  rating: number;
-  color: string;
-  budget: number;
-  headquarters: string;
-}[] = [
-  {
-    name: "Red Bull Racing",
-    rating: 96,
-    color: "#1E41FF",
-    budget: 180,
-    headquarters: "Milton Keynes, United Kingdom",
-  },
-  {
-    name: "McLaren",
-    rating: 95,
-    color: "#FF8000",
-    budget: 175,
-    headquarters: "Woking, United Kingdom",
-  },
-  {
-    name: "Ferrari",
-    rating: 94,
-    color: "#DC0000",
-    budget: 178,
-    headquarters: "Maranello, Italy",
-  },
-  {
-    name: "Mercedes",
-    rating: 92,
-    color: "#00D2BE",
-    budget: 170,
-    headquarters: "Brackley, United Kingdom",
-  },
-  {
-    name: "Williams",
-    rating: 84,
-    color: "#005AFF",
-    budget: 95,
-    headquarters: "Grove, United Kingdom",
-  },
-  {
-    name: "Aston Martin",
-    rating: 83,
-    color: "#006F62",
-    budget: 120,
-    headquarters: "Silverstone, United Kingdom",
-  },
-  {
-    name: "Racing Bulls",
-    rating: 81,
-    color: "#2B4562",
-    budget: 90,
-    headquarters: "Faenza, Italy",
-  },
-  {
-    name: "Alpine",
-    rating: 79,
-    color: "#FF5AB5",
-    budget: 100,
-    headquarters: "Enstone, United Kingdom",
-  },
-  {
-    name: "Haas",
-    rating: 76,
-    color: "#B6BABD",
-    budget: 85,
-    headquarters: "Kannapolis, United States",
-  },
-  {
-    name: "Kick Sauber",
-    rating: 74,
-    color: "#52E252",
-    budget: 82,
-    headquarters: "Hinwil, Switzerland",
-  },
+const RIVAL_TEAM_NAMES: { name: string; rating: number }[] = [
+  { name: "Red Bull Racing", rating: 96 },
+  { name: "McLaren", rating: 95 },
+  { name: "Ferrari", rating: 94 },
+  { name: "Mercedes", rating: 92 },
+  { name: "Williams", rating: 84 },
+  { name: "Aston Martin", rating: 83 },
+  { name: "Racing Bulls", rating: 81 },
+  { name: "Alpine", rating: 79 },
+  { name: "Haas", rating: 76 },
+  { name: "Kick Sauber", rating: 74 },
 ];
 const RIVAL_DRIVERS = [
   { name: "Max Verstappen", team: "Red Bull Racing", nationality: "Netherlands" },
@@ -449,7 +383,7 @@ function compoundsForWeather(w: Weather): Compound[] {
 
 function generateRivals(): RivalTeam[] {
   let nameIdx = 0;
-  return RIVAL_TEAMS.map((t) => {
+  return RIVAL_TEAM_NAMES.map((t) => {
     const makeDriver = (): DriverInfo => {
       const name = RIVAL_DRIVER_NAMES[nameIdx % RIVAL_DRIVER_NAMES.length];
       nameIdx += 1;
