@@ -322,36 +322,27 @@ const RIVAL_TEAM_NAMES: { name: string; rating: number }[] = [
   { name: "Haas", rating: 76 },
   { name: "Kick Sauber", rating: 74 },
 ];
-const RIVAL_DRIVERS = [
-  { name: "Max Verstappen", team: "Red Bull Racing", nationality: "Netherlands" },
-  { name: "Yuki Tsunoda", team: "Red Bull Racing", nationality: "Japan" },
-
-  { name: "Lando Norris", team: "McLaren", nationality: "United Kingdom" },
-  { name: "Oscar Piastri", team: "McLaren", nationality: "Australia" },
-
-  { name: "Charles Leclerc", team: "Ferrari", nationality: "Monaco" },
-  { name: "Lewis Hamilton", team: "Ferrari", nationality: "United Kingdom" },
-
-  { name: "George Russell", team: "Mercedes", nationality: "United Kingdom" },
-  { name: "Andrea Kimi Antonelli", team: "Mercedes", nationality: "Italy" },
-
-  { name: "Alexander Albon", team: "Williams", nationality: "Thailand" },
-  { name: "Carlos Sainz", team: "Williams", nationality: "Spain" },
-
-  { name: "Fernando Alonso", team: "Aston Martin", nationality: "Spain" },
-  { name: "Lance Stroll", team: "Aston Martin", nationality: "Canada" },
-
-  { name: "Pierre Gasly", team: "Alpine", nationality: "France" },
-  { name: "Franco Colapinto", team: "Alpine", nationality: "Argentina" },
-
-  { name: "Esteban Ocon", team: "Haas", nationality: "France" },
-  { name: "Oliver Bearman", team: "Haas", nationality: "United Kingdom" },
-
-  { name: "Liam Lawson", team: "Racing Bulls", nationality: "New Zealand" },
-  { name: "Isack Hadjar", team: "Racing Bulls", nationality: "France" },
-
-  { name: "Nico Hülkenberg", team: "Kick Sauber", nationality: "Germany" },
-  { name: "Gabriel Bortoleto", team: "Kick Sauber", nationality: "Brazil" },
+const RIVAL_DRIVER_NAMES = [
+  "Max Verstappen",
+  "Yuki Tsunoda",
+  "Lando Norris",
+  "Oscar Piastri",
+  "Charles Leclerc",
+  "Lewis Hamilton",
+  "George Russell",
+  "Andrea Kimi Antonelli",
+  "Alexander Albon",
+  "Carlos Sainz",
+  "Fernando Alonso",
+  "Lance Stroll",
+  "Pierre Gasly",
+  "Franco Colapinto",
+  "Esteban Ocon",
+  "Oliver Bearman",
+  "Liam Lawson",
+  "Isack Hadjar",
+  "Nico Hülkenberg",
+  "Gabriel Bortoleto",
 ];
 
 const POINTS_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
