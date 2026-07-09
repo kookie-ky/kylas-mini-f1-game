@@ -310,7 +310,7 @@ const TRACKS: Track[] = [
   { id: "bra", name: "Interlagos Circuit", country: "Brazil", laps: 71 },
 ];
 
-const RIVAL_TEAMS = [
+const RIVAL_TEAM_NAMES: { name: string; rating: number }[] = [
   {
     name: "Red Bull Racing",
     rating: 96,
@@ -443,7 +443,7 @@ function compoundsForWeather(w: Weather): Compound[] {
 
 function generateRivals(): RivalTeam[] {
   let nameIdx = 0;
-  return RIVAL_TEAM_NAMES.map((t) => {
+  return RIVAL_TEAMS.map((t) => {
     const makeDriver = (): DriverInfo => {
       const name = RIVAL_DRIVER_NAMES[nameIdx % RIVAL_DRIVER_NAMES.length];
       nameIdx += 1;
