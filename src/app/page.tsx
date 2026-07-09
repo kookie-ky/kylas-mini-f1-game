@@ -310,7 +310,13 @@ const TRACKS: Track[] = [
   { id: "bra", name: "Interlagos Circuit", country: "Brazil", laps: 71 },
 ];
 
-const RIVAL_TEAM_NAMES: { name: string; rating: number }[] = [
+const RIVAL_TEAM_NAMES: {
+  name: string;
+  rating: number;
+  color: string;
+  budget: number;
+  headquarters: string;
+}[] = [
   {
     name: "Red Bull Racing",
     rating: 96,
