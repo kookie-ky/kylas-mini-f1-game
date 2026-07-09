@@ -16,12 +16,15 @@ const PALETTE = {
   brick: "#AD3B2A",
 };
 
+const SAVE_KEY = "paddock-manager-save-v1";
+
 /* =====================================================================
    TYPES
    ===================================================================== */
 type Screen = "menu" | "newCareer" | "continue" | "settings" | "hub" | "raceWeekend";
 type HubTab = "overview" | "garage" | "drivers" | "calendar" | "standings";
-type Compound = "Soft" | "Medium" | "Hard";
+type Compound = "Soft" | "Medium" | "Hard" | "Intermediate" | "Wet";
+type Weather = "Dry" | "Damp" | "Wet";
 
 interface DriverStats {
   pace: number;
@@ -34,6 +37,8 @@ interface DriverInfo {
   nationality: string;
   stats: DriverStats;
   wage: number;
+  morale: number;
+  contractRounds: number;
 }
 interface CarStats {
   aero: number;
@@ -44,6 +49,11 @@ interface Livery {
   id: string;
   name: string;
   colors: string[];
+}
+interface Emblem {
+  id: string;
+  label: string;
+  colors: [string, string];
 }
 interface RivalTeam {
   name: string;
@@ -59,6 +69,7 @@ interface Track {
 interface RoundRecord {
   track: Track;
   completed: boolean;
+  weather: Weather;
 }
 interface RaceResultRow {
   driverId: string;
@@ -82,6 +93,7 @@ interface GameState {
   roundIndex: number;
   driverStandings: Record<string, { name: string; team: string; points: number }>;
   constructorStandings: Record<string, number>;
+  lastNews: string;
 }
 
 /* =====================================================================
@@ -92,17 +104,26 @@ const LIVERIES: Livery[] = [
   { id: "brick", name: "Brick & Bone", colors: [PALETTE.brick, PALETTE.parchment, PALETTE.ink] },
   { id: "midnight", name: "Midnight Racer", colors: ["#1B2A4A", "#E2A33B", "#F1E8D6"] },
 ];
-const LOGOS = ["🦁", "🐺", "🦅", "🐆", "🐝", "⚡"];
+
+// F1-inspired emblem badges (shield split into two team-style colours) instead of animal icons.
+const EMBLEMS: Emblem[] = [
+  { id: "scarlet", label: "Scarlet Shield", colors: ["#D40000", "#FFF200"] }, // Ferrari-esque
+  { id: "apex-navy", label: "Apex Navy", colors: ["#1E3A8A", "#FFD500"] }, // Red Bull-esque
+  { id: "azure", label: "Azure Wing", colors: ["#0057B8", "#FFFFFF"] }, // Williams-esque
+  { id: "papaya", label: "Papaya Blaze", colors: ["#FF8000", "#000000"] }, // McLaren-esque
+  { id: "silver-teal", label: "Silver Teal", colors: ["#00A19C", "#C6C6C6"] }, // Mercedes-esque
+  { id: "rose-blue", label: "Rosé Blue", colors: ["#0090D0", "#FF6FA8"] }, // Alpine-esque
+];
 
 const DRIVER_POOL: DriverInfo[] = [
-  { id: "d1", name: "Mateo Ferraz", nationality: "Brazil", stats: { pace: 78, consistency: 70, tyreManagement: 74 }, wage: 8 },
-  { id: "d2", name: "Elin Kovac", nationality: "Slovenia", stats: { pace: 74, consistency: 80, tyreManagement: 68 }, wage: 7 },
-  { id: "d3", name: "Jonas Wetteland", nationality: "Norway", stats: { pace: 66, consistency: 72, tyreManagement: 70 }, wage: 4 },
-  { id: "d4", name: "Priya Anand", nationality: "India", stats: { pace: 70, consistency: 65, tyreManagement: 77 }, wage: 5 },
-  { id: "d5", name: "Lucas Ferreira", nationality: "Portugal", stats: { pace: 83, consistency: 68, tyreManagement: 65 }, wage: 12 },
-  { id: "d6", name: "Noa Steinberg", nationality: "Israel", stats: { pace: 60, consistency: 75, tyreManagement: 80 }, wage: 3 },
-  { id: "d7", name: "Kenji Osei", nationality: "Ghana", stats: { pace: 64, consistency: 60, tyreManagement: 62 }, wage: 2 },
-  { id: "d8", name: "Camille Duval", nationality: "France", stats: { pace: 76, consistency: 74, tyreManagement: 71 }, wage: 9 },
+  { id: "d1", name: "Mateo Ferraz", nationality: "Brazil", stats: { pace: 78, consistency: 70, tyreManagement: 74 }, wage: 8, morale: 70, contractRounds: 0 },
+  { id: "d2", name: "Elin Kovac", nationality: "Slovenia", stats: { pace: 74, consistency: 80, tyreManagement: 68 }, wage: 7, morale: 70, contractRounds: 0 },
+  { id: "d3", name: "Jonas Wetteland", nationality: "Norway", stats: { pace: 66, consistency: 72, tyreManagement: 70 }, wage: 4, morale: 70, contractRounds: 0 },
+  { id: "d4", name: "Priya Anand", nationality: "India", stats: { pace: 70, consistency: 65, tyreManagement: 77 }, wage: 5, morale: 70, contractRounds: 0 },
+  { id: "d5", name: "Lucas Ferreira", nationality: "Portugal", stats: { pace: 83, consistency: 68, tyreManagement: 65 }, wage: 12, morale: 70, contractRounds: 0 },
+  { id: "d6", name: "Noa Steinberg", nationality: "Israel", stats: { pace: 60, consistency: 75, tyreManagement: 80 }, wage: 3, morale: 70, contractRounds: 6 },
+  { id: "d7", name: "Kenji Osei", nationality: "Ghana", stats: { pace: 64, consistency: 60, tyreManagement: 62 }, wage: 2, morale: 70, contractRounds: 6 },
+  { id: "d8", name: "Camille Duval", nationality: "France", stats: { pace: 76, consistency: 74, tyreManagement: 71 }, wage: 9, morale: 70, contractRounds: 0 },
 ];
 const STARTER_DRIVER_IDS = ["d6", "d7"];
 
@@ -135,11 +156,30 @@ const RIVAL_DRIVER_NAMES = [
 ];
 
 const POINTS_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
-const COMPOUND_PACE: Record<Compound, number> = { Soft: 6, Medium: 2, Hard: -2 };
-const COMPOUND_DEGRADATION: Record<Compound, number> = { Soft: -7, Medium: -3, Hard: 0 };
+const COMPOUND_PACE: Record<Compound, number> = { Soft: 6, Medium: 2, Hard: -2, Intermediate: -9, Wet: -16 };
+const COMPOUND_DEGRADATION: Record<Compound, number> = { Soft: -7, Medium: -3, Hard: 0, Intermediate: -4, Wet: -1 };
+const WEATHER_META: Record<Weather, { label: string; accent: string; blurb: string }> = {
+  Dry: { label: "Dry", accent: PALETTE.amber, blurb: "Clear skies — slicks only." },
+  Damp: { label: "Damp", accent: "#6B8CAE", blurb: "Greasy track — mediums, hards, or intermediates." },
+  Wet: { label: "Wet", accent: "#1B2A4A", blurb: "Standing water — wets or intermediates required." },
+};
 
 function rand(min: number, max: number) {
   return Math.random() * (max - min) + min;
+}
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
+}
+function randomWeather(): Weather {
+  const r = Math.random();
+  if (r < 0.6) return "Dry";
+  if (r < 0.85) return "Damp";
+  return "Wet";
+}
+function compoundsForWeather(w: Weather): Compound[] {
+  if (w === "Dry") return ["Soft", "Medium", "Hard"];
+  if (w === "Damp") return ["Medium", "Hard", "Intermediate"];
+  return ["Intermediate", "Wet"];
 }
 
 function generateRivals(): RivalTeam[] {
@@ -154,11 +194,13 @@ function generateRivals(): RivalTeam[] {
         name,
         nationality: "—",
         stats: {
-          pace: Math.round(Math.min(96, Math.max(35, base + rand(-6, 10)))),
-          consistency: Math.round(Math.min(95, Math.max(40, base + rand(-8, 8)))),
-          tyreManagement: Math.round(Math.min(95, Math.max(40, base + rand(-8, 8)))),
+          pace: Math.round(clamp(base + rand(-6, 10), 35, 96)),
+          consistency: Math.round(clamp(base + rand(-8, 8), 40, 95)),
+          tyreManagement: Math.round(clamp(base + rand(-8, 8), 40, 95)),
         },
         wage: 0,
+        morale: 75,
+        contractRounds: 99,
       };
     };
     return { name: t.name, carRating: t.rating, drivers: [makeDriver(), makeDriver()] };
@@ -167,6 +209,71 @@ function generateRivals(): RivalTeam[] {
 
 function upgradeCost(currentLevel: number) {
   return 10 + Math.ceil(currentLevel / 8) * 5;
+}
+
+/* =====================================================================
+   PERSISTENCE
+   ===================================================================== */
+function loadSave(): GameState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as GameState;
+  } catch {
+    return null;
+  }
+}
+function persistSave(game: GameState | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (game) window.localStorage.setItem(SAVE_KEY, JSON.stringify(game));
+    else window.localStorage.removeItem(SAVE_KEY);
+  } catch {
+    /* storage unavailable — silently skip */
+  }
+}
+
+/* =====================================================================
+   PROCEDURAL TRACK SHAPES
+   ===================================================================== */
+function hashStr(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return h;
+}
+function mulberry32(seed: number) {
+  let t = seed;
+  return function () {
+    t |= 0;
+    t = (t + 0x6d2b79f5) | 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function trackPoints(seed: number, n = 11): [number, number][] {
+  const rnd = mulberry32(seed);
+  const cx = 60;
+  const cy = 60;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2;
+    const r = 30 + rnd() * 24;
+    pts.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r]);
+  }
+  return pts;
+}
+function TrackShape({ trackId, accent, className = "" }: { trackId: string; accent: string; className?: string }) {
+  const pts = useMemo(() => trackPoints(hashStr(trackId)), [trackId]);
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ") + " Z";
+  return (
+    <svg viewBox="0 0 120 120" className={className} aria-hidden="true">
+      <path d={d} fill="none" stroke={accent} strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={pts[0][0]} cy={pts[0][1]} r="3.4" fill={PALETTE.brick} />
+      <rect x={pts[0][0] - 1} y={pts[0][1] - 7} width="2" height="14" fill={PALETTE.ink} transform={`rotate(20 ${pts[0][0]} ${pts[0][1]})`} />
+    </svg>
+  );
 }
 
 /* =====================================================================
@@ -195,6 +302,17 @@ function LocalClock() {
     return () => clearInterval(id);
   }, []);
   return <span className={`${mono.className} tabular-nums`}>{time ?? "--:--:--"}</span>;
+}
+
+function EmblemBadge({ emblemId, size = 32 }: { emblemId: string; size?: number }) {
+  const emblem = EMBLEMS.find((e) => e.id === emblemId) ?? EMBLEMS[0];
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <path d="M20 2 L36 8 V20 C36 30 29 36 20 38 C11 36 4 30 4 20 V8 Z" fill={emblem.colors[0]} />
+      <path d="M20 2 L36 8 V20 C36 28 31 34 22 37.5 L20 38 L20 2 Z" fill={emblem.colors[1]} opacity="0.88" />
+      <path d="M20 2 L36 8 V20 C36 30 29 36 20 38 C11 36 4 30 4 20 V8 Z" fill="none" stroke={PALETTE.ink} strokeWidth="1.5" />
+    </svg>
+  );
 }
 
 function Mascot({ excited = false, accent = PALETTE.green, size = "normal" }: { excited?: boolean; accent?: string; size?: "normal" | "small" }) {
@@ -259,18 +377,24 @@ function DrivingCar({ fast, color }: { fast: boolean; color: string }) {
   );
 }
 
-function StatBar({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatBar({ label, value, accent, max = 99 }: { label: string; value: number; accent: string; max?: number }) {
   return (
     <div className="mb-4">
       <div className={`${mono.className} flex justify-between text-xs uppercase tracking-widest mb-1`} style={{ color: accent }}>
         <span>{label}</span>
-        <span>{value}/99</span>
+        <span>{Math.round(value)}/{max}</span>
       </div>
       <div className="h-3 rounded-full overflow-hidden" style={{ background: PALETTE.paperLine }}>
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(value / 99) * 100}%`, background: accent }} />
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${clamp((value / max) * 100, 0, 100)}%`, background: accent }} />
       </div>
     </div>
   );
+}
+
+function moraleColor(morale: number) {
+  if (morale >= 65) return PALETTE.green;
+  if (morale >= 40) return PALETTE.amber;
+  return PALETTE.brick;
 }
 
 function BackRow({ onBack, label, accent, centered = false }: { onBack: () => void; label: string; accent: string; centered?: boolean }) {
@@ -365,10 +489,10 @@ function MenuScreen({ onSelect, hasSave }: { onSelect: (s: Screen) => void; hasS
 /* =====================================================================
    NEW CAREER SCREEN
    ===================================================================== */
-function NewCareerScreen({ onBack, onConfirm }: { onBack: () => void; onConfirm: (teamName: string, livery: Livery, logo: string) => void }) {
+function NewCareerScreen({ onBack, onConfirm }: { onBack: () => void; onConfirm: (teamName: string, livery: Livery, emblemId: string) => void }) {
   const [name, setName] = useState("");
   const [liveryId, setLiveryId] = useState(LIVERIES[0].id);
-  const [logo, setLogo] = useState(LOGOS[0]);
+  const [emblemId, setEmblemId] = useState(EMBLEMS[0].id);
   const activeLivery = LIVERIES.find((l) => l.id === liveryId)!;
 
   return (
@@ -395,18 +519,18 @@ function NewCareerScreen({ onBack, onConfirm }: { onBack: () => void; onConfirm:
         ))}
       </div>
       <label className={`${mono.className} block text-xs uppercase tracking-widest mb-3`} style={{ color: PALETTE.green }}>Emblem</label>
-      <div className="flex flex-wrap gap-2 mb-8">
-        {LOGOS.map((l) => (
-          <button key={l} onClick={() => setLogo(l)} className="w-12 h-12 text-2xl rounded-md border flex items-center justify-center" style={{ borderColor: PALETTE.ink, borderWidth: logo === l ? 3 : 1, background: logo === l ? PALETTE.ink + "0D" : PALETTE.parchment }}>
-            {l}
+      <div className="flex flex-wrap gap-3 mb-8">
+        {EMBLEMS.map((e) => (
+          <button key={e.id} onClick={() => setEmblemId(e.id)} title={e.label} className="w-14 h-14 rounded-md border flex items-center justify-center p-1.5" style={{ borderColor: PALETTE.ink, borderWidth: emblemId === e.id ? 3 : 1, background: emblemId === e.id ? PALETTE.ink + "0D" : PALETTE.parchment }}>
+            <EmblemBadge emblemId={e.id} size={34} />
           </button>
         ))}
       </div>
       <div className={`${workSans.className} text-sm mb-6 rounded-md border px-4 py-3`} style={{ borderColor: PALETTE.paperLine, color: `${PALETTE.ink}AA` }}>
-        You'll start with a cost cap of <strong>40 budget units</strong>, a baseline car (40 Aero / 40 Power Unit / 40 Reliability), and two rookie drivers ready to sign on. Build from there across an 8-round calendar.
+        You'll start with a cost cap of <strong>40 budget units</strong>, a baseline car (40 Aero / 40 Power Unit / 40 Reliability), and two rookie drivers already under contract. Build from there across an 8-round calendar with its own weather forecast.
       </div>
       <button
-        onClick={() => name.trim() && onConfirm(name.trim(), activeLivery, logo)}
+        onClick={() => name.trim() && onConfirm(name.trim(), activeLivery, emblemId)}
         disabled={!name.trim()}
         className={`${mono.className} w-full uppercase tracking-widest text-sm py-4 rounded-md transition-opacity disabled:opacity-40`}
         style={{ background: PALETTE.green, color: PALETTE.parchment }}
@@ -428,7 +552,7 @@ function ContinueScreen({ onBack, onNewCareer, onResume, hasSave, teamName }: { 
       {hasSave ? (
         <>
           <p className={`${workSans.className} text-base`} style={{ color: `${PALETTE.ink}CC` }}>
-            {teamName} is fuelled up and waiting in the garage.
+            {teamName} is fuelled up and waiting in the garage. Your save was loaded from this browser's storage.
           </p>
           <button onClick={onResume} className={`${mono.className} text-xs uppercase tracking-widest px-5 py-3 rounded-md`} style={{ background: PALETTE.amber, color: PALETTE.ink }}>
             Resume season ▸
@@ -437,7 +561,7 @@ function ContinueScreen({ onBack, onNewCareer, onResume, hasSave, teamName }: { 
       ) : (
         <>
           <p className={`${workSans.className} text-base`} style={{ color: `${PALETTE.ink}CC` }}>
-            No saved season on file yet — this stays in memory for your current visit only. Start a career and this screen will offer to resume it.
+            No saved season on this device yet. Start a career and it will be saved automatically after every race.
           </p>
           <button onClick={onNewCareer} className={`${mono.className} text-xs uppercase tracking-widest border px-5 py-3 rounded-md`} style={{ borderColor: PALETTE.ink }}>
             Start New Career ▸
@@ -451,9 +575,10 @@ function ContinueScreen({ onBack, onNewCareer, onResume, hasSave, teamName }: { 
 /* =====================================================================
    SETTINGS SCREEN
    ===================================================================== */
-function SettingsScreen({ onBack }: { onBack: () => void }) {
+function SettingsScreen({ onBack, onResetSave }: { onBack: () => void; onResetSave: () => void }) {
   const [volume, setVolume] = useState(70);
   const [difficulty, setDifficulty] = useState<"rookie" | "pro" | "legend">("pro");
+  const [confirming, setConfirming] = useState(false);
   return (
     <div className="w-full max-w-xl">
       <BackRow onBack={onBack} label="Settings" accent={PALETTE.brick} />
@@ -467,6 +592,22 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
           </button>
         ))}
       </div>
+      <label className={`${mono.className} block text-xs uppercase tracking-widest mb-3`} style={{ color: PALETTE.brick }}>Save data</label>
+      {!confirming ? (
+        <button onClick={() => setConfirming(true)} className={`${mono.className} text-xs uppercase tracking-widest border rounded-md px-4 py-3`} style={{ borderColor: PALETTE.brick, color: PALETTE.brick }}>
+          Erase saved season
+        </button>
+      ) : (
+        <div className="flex items-center gap-3">
+          <span className={`${workSans.className} text-sm`}>Erase your saved season permanently?</span>
+          <button onClick={() => { onResetSave(); setConfirming(false); }} className={`${mono.className} text-xs uppercase tracking-widest rounded-md px-3 py-2`} style={{ background: PALETTE.brick, color: PALETTE.parchment }}>
+            Confirm
+          </button>
+          <button onClick={() => setConfirming(false)} className={`${mono.className} text-xs uppercase tracking-widest border rounded-md px-3 py-2`} style={{ borderColor: PALETTE.ink }}>
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -496,15 +637,24 @@ function HubScreen({ game, setGame, onExit, onEnterRace }: { game: GameState; se
   function signDriver(candidate: DriverInfo, slot: 0 | 1) {
     if (game.budget < candidate.wage) return;
     const drivers = [...game.drivers] as [DriverInfo, DriverInfo];
-    drivers[slot] = candidate;
+    drivers[slot] = { ...candidate, contractRounds: 6, morale: 70 };
     setGame({ ...game, drivers, budget: game.budget - candidate.wage });
+  }
+
+  function renewContract(slot: 0 | 1) {
+    const d = game.drivers[slot];
+    const cost = 8 + d.wage;
+    if (game.budget < cost || d.morale < 35) return;
+    const drivers = [...game.drivers] as [DriverInfo, DriverInfo];
+    drivers[slot] = { ...d, contractRounds: 6, morale: clamp(d.morale + 10, 0, 100) };
+    setGame({ ...game, drivers, budget: game.budget - cost });
   }
 
   return (
     <div className="w-full max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <span className="text-3xl">{game.logo}</span>
+          <EmblemBadge emblemId={game.logo} size={40} />
           <div>
             <h2 className={`${bebas.className} text-3xl uppercase leading-none`} style={{ color: game.livery.colors[0] }}>{game.teamName}</h2>
             <span className={`${mono.className} text-xs uppercase tracking-widest`} style={{ color: `${PALETTE.ink}88` }}>Round {game.roundIndex + 1} of {game.calendar.length}</span>
@@ -512,6 +662,12 @@ function HubScreen({ game, setGame, onExit, onEnterRace }: { game: GameState; se
         </div>
         <button onClick={onExit} className={`${mono.className} text-xs uppercase tracking-widest border rounded-md px-3 py-2`} style={{ borderColor: PALETTE.ink }}>Menu</button>
       </div>
+
+      {game.lastNews && (
+        <div className={`${workSans.className} text-sm mb-6 rounded-md border-l-4 px-4 py-3`} style={{ borderColor: PALETTE.amber, background: `${PALETTE.amber}14`, color: `${PALETTE.ink}CC` }}>
+          {game.lastNews}
+        </div>
+      )}
 
       <div className="flex gap-4 mb-6 text-sm">
         <div className={`${mono.className} rounded-md border px-3 py-2`} style={{ borderColor: PALETTE.paperLine }}>
@@ -534,12 +690,20 @@ function HubScreen({ game, setGame, onExit, onEnterRace }: { game: GameState; se
 
       {tab === "overview" && (
         <div>
-          <div className="flex items-center gap-6 mb-8">
+          <div className="flex items-center gap-6 mb-6">
             <Mascot accent={game.livery.colors[0]} size="small" />
             <p className={`${workSans.className} text-sm`} style={{ color: `${PALETTE.ink}CC` }}>
-              {nextRound ? <>Next up: <strong>{nextRound.track.name}</strong>, {nextRound.track.country} — {nextRound.track.laps} laps.</> : "Season complete — check the Championship tab for the final result."}
+              {nextRound ? <>Next up: <strong>{nextRound.track.name}</strong>, {nextRound.track.country} — {nextRound.track.laps} laps. Forecast: <strong style={{ color: WEATHER_META[nextRound.weather].accent }}>{WEATHER_META[nextRound.weather].label}</strong>.</> : "Season complete — check the Championship tab for the final result."}
             </p>
           </div>
+          {nextRound && (
+            <div className="flex items-center gap-4 mb-8 rounded-md border px-4 py-3" style={{ borderColor: PALETTE.paperLine }}>
+              <TrackShape trackId={nextRound.track.id} accent={game.livery.colors[0]} className="w-20 h-20 shrink-0" />
+              <div className={`${workSans.className} text-xs`} style={{ color: `${PALETTE.ink}99` }}>
+                Circuit layout is procedurally sketched from the track name — an abstract read on the corner sequence, not a scale map.
+              </div>
+            </div>
+          )}
           <StatBar label="Aero" value={game.carStats.aero} accent={PALETTE.green} />
           <StatBar label="Power Unit" value={game.carStats.powerUnit} accent={PALETTE.amber} />
           <StatBar label="Reliability" value={game.carStats.reliability} accent={PALETTE.brick} />
@@ -547,7 +711,11 @@ function HubScreen({ game, setGame, onExit, onEnterRace }: { game: GameState; se
             {game.drivers.map((d, i) => (
               <div key={i} className="rounded-md border px-4 py-3" style={{ borderColor: PALETTE.paperLine }}>
                 <span className={`${bebas.className} block text-xl uppercase`}>{d.name}</span>
-                <span className={`${mono.className} text-xs opacity-70`}>Pace {d.stats.pace} · Consistency {d.stats.consistency} · Tyres {d.stats.tyreManagement}</span>
+                <span className={`${mono.className} text-xs opacity-70 block mb-2`}>Pace {d.stats.pace} · Consistency {d.stats.consistency} · Tyres {d.stats.tyreManagement}</span>
+                <StatBar label="Morale" value={d.morale} accent={moraleColor(d.morale)} max={100} />
+                <span className={`${mono.className} text-[10px] uppercase tracking-widest`} style={{ color: d.contractRounds <= 1 ? PALETTE.brick : `${PALETTE.ink}77` }}>
+                  {d.contractRounds > 0 ? `Contract: ${d.contractRounds} round${d.contractRounds === 1 ? "" : "s"} left` : "Out of contract"}
+                </span>
               </div>
             ))}
           </div>
@@ -581,11 +749,25 @@ function HubScreen({ game, setGame, onExit, onEnterRace }: { game: GameState; se
       {tab === "drivers" && (
         <div>
           <p className={`${workSans.className} text-sm mb-4`} style={{ color: `${PALETTE.ink}AA` }}>Current lineup</p>
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
             {game.drivers.map((d, i) => (
               <div key={i} className="rounded-md border px-4 py-3" style={{ borderColor: PALETTE.ink, borderWidth: 2 }}>
                 <span className={`${bebas.className} block text-xl uppercase`}>{d.name}</span>
-                <span className={`${mono.className} text-xs opacity-70`}>{d.nationality} · Pace {d.stats.pace}</span>
+                <span className={`${mono.className} text-xs opacity-70 block mb-2`}>{d.nationality} · Pace {d.stats.pace}</span>
+                <StatBar label="Morale" value={d.morale} accent={moraleColor(d.morale)} max={100} />
+                <div className="flex items-center justify-between mt-2">
+                  <span className={`${mono.className} text-[10px] uppercase tracking-widest`} style={{ color: d.contractRounds <= 1 ? PALETTE.brick : `${PALETTE.ink}77` }}>
+                    {d.contractRounds > 0 ? `${d.contractRounds} round${d.contractRounds === 1 ? "" : "s"} left` : "Out of contract"}
+                  </span>
+                  <button
+                    onClick={() => renewContract(i as 0 | 1)}
+                    disabled={game.budget < 8 + d.wage || d.morale < 35}
+                    className={`${mono.className} text-[10px] uppercase tracking-widest border rounded px-2 py-1.5 disabled:opacity-30`}
+                    style={{ borderColor: PALETTE.green, color: PALETTE.green }}
+                  >
+                    Renew — {8 + d.wage}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -614,11 +796,12 @@ function HubScreen({ game, setGame, onExit, onEnterRace }: { game: GameState; se
       {tab === "calendar" && (
         <div className="flex flex-col gap-2">
           {game.calendar.map((r, i) => (
-            <div key={r.track.id} className="flex items-center justify-between rounded-md border px-4 py-3" style={{ borderColor: i === game.roundIndex ? PALETTE.brick : PALETTE.paperLine, borderWidth: i === game.roundIndex ? 2 : 1 }}>
-              <div>
+            <div key={r.track.id} className="flex items-center gap-3 rounded-md border px-4 py-3" style={{ borderColor: i === game.roundIndex ? PALETTE.brick : PALETTE.paperLine, borderWidth: i === game.roundIndex ? 2 : 1 }}>
+              <TrackShape trackId={r.track.id} accent={r.completed ? `${PALETTE.ink}55` : game.livery.colors[0]} className="w-12 h-12 shrink-0" />
+              <div className="flex-1">
                 <span className={`${mono.className} text-xs opacity-60 mr-2`}>R{i + 1}</span>
                 <span className={`${bebas.className} text-lg uppercase`}>{r.track.name}</span>
-                <span className={`${workSans.className} text-xs block opacity-70`}>{r.track.country} · {r.track.laps} laps</span>
+                <span className={`${workSans.className} text-xs block opacity-70`}>{r.track.country} · {r.track.laps} laps · <span style={{ color: WEATHER_META[r.weather].accent }}>{WEATHER_META[r.weather].label}</span></span>
               </div>
               <span className={`${mono.className} text-xs uppercase tracking-widest`} style={{ color: r.completed ? PALETTE.green : i === game.roundIndex ? PALETTE.brick : `${PALETTE.ink}66` }}>
                 {r.completed ? "Complete" : i === game.roundIndex ? "Next" : "Upcoming"}
@@ -659,15 +842,75 @@ function HubScreen({ game, setGame, onExit, onEnterRace }: { game: GameState; se
 }
 
 /* =====================================================================
-   RACE WEEKEND — Qualifying → Strategy → Safety Car call → Results
+   TELEMETRY PANEL (shown live during the race stage)
+   ===================================================================== */
+function TelemetryPanel({ drivers, tyres, weather }: { drivers: [DriverInfo, DriverInfo]; tyres: [Compound, Compound]; weather: Weather }) {
+  const [tick, setTick] = useState(0);
+  const [traces, setTraces] = useState<[number[], number[]]>([[0], [0]]);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => Math.min(t + 1, 14)), 420);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (tick === 0) return;
+    setTraces((prev) => {
+      const next: [number[], number[]] = [[...prev[0]], [...prev[1]]];
+      [0, 1].forEach((i) => {
+        const deg = Math.abs(COMPOUND_DEGRADATION[tyres[i]]);
+        const wearFactor = 1 - drivers[i].stats.tyreManagement / 150;
+        const last = next[i][next[i].length - 1] ?? 0;
+        next[i].push(clamp(last + deg * wearFactor * 1.7 + rand(-1, 2.5), 0, 100));
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
+
+  return (
+    <div className="rounded-md border px-4 py-4 mb-6 text-left" style={{ borderColor: PALETTE.paperLine }}>
+      <div className={`${mono.className} text-xs uppercase tracking-widest mb-3`} style={{ color: PALETTE.green }}>
+        Live Telemetry — Lap {Math.min(tick, 14)} · {WEATHER_META[weather].label}
+      </div>
+      {drivers.map((d, i) => {
+        const wear = traces[i][traces[i].length - 1];
+        const pts = traces[i]
+          .map((v, idx) => `${(idx / Math.max(1, traces[i].length - 1)) * 100},${24 - (v / 100) * 24}`)
+          .join(" ");
+        return (
+          <div key={d.id} className="mb-3 last:mb-0">
+            <div className={`${workSans.className} flex justify-between text-xs mb-1`}>
+              <span><strong>{d.name}</strong> — {tyres[i]}</span>
+              <span>Tyre wear {Math.round(wear)}%</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden mb-1" style={{ background: PALETTE.paperLine }}>
+              <div className="h-full" style={{ width: `${wear}%`, background: PALETTE.brick }} />
+            </div>
+            <svg viewBox="0 0 100 24" className="w-full h-6">
+              <polyline points={pts} fill="none" stroke={PALETTE.green} strokeWidth="1.5" />
+            </svg>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* =====================================================================
+   RACE WEEKEND — Briefing → Qualifying → Strategy → Safety Car → Racing → Results
    ===================================================================== */
 type RaceStage = "briefing" | "qualifying" | "strategy" | "racing" | "safetyCar" | "results";
 
 function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame: (g: GameState) => void; onDone: () => void }) {
-  const track = game.calendar[game.roundIndex].track;
+  const round = game.calendar[game.roundIndex];
+  const track = round.track;
+  const weather = round.weather;
+  const availableCompounds = compoundsForWeather(weather);
+
   const [stage, setStage] = useState<RaceStage>("briefing");
   const [grid, setGrid] = useState<{ id: string; name: string; team: string; isPlayer: boolean; score: number }[]>([]);
-  const [tyres, setTyres] = useState<[Compound, Compound]>(["Medium", "Medium"]);
+  const [tyres, setTyres] = useState<[Compound, Compound]>([availableCompounds[0], availableCompounds[0]]);
   const [safetyCar, setSafetyCar] = useState(false);
   const [pitCalls, setPitCalls] = useState<[boolean, boolean]>([true, true]);
   const [results, setResults] = useState<RaceResultRow[]>([]);
@@ -676,8 +919,9 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
   function runQualifying() {
     const entries: { id: string; name: string; team: string; isPlayer: boolean; score: number }[] = [];
     const playerCarRating = (game.carStats.aero + game.carStats.powerUnit) / 2;
-    game.drivers.forEach((d, i) => {
-      entries.push({ id: d.id, name: d.name, team: game.teamName, isPlayer: true, score: playerCarRating * 0.5 + d.stats.pace * 0.5 + rand(-8, 8) });
+    game.drivers.forEach((d) => {
+      const moraleFactor = 0.94 + (d.morale / 100) * 0.12;
+      entries.push({ id: d.id, name: d.name, team: game.teamName, isPlayer: true, score: (playerCarRating * 0.5 + d.stats.pace * 0.5) * moraleFactor + rand(-8, 8) });
     });
     game.rivals.forEach((r) => {
       r.drivers.forEach((d) => {
@@ -692,31 +936,32 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
 
   function finalizeRace() {
     const carPerf = (game.carStats.aero + game.carStats.powerUnit) / 2;
-    const rows: RaceResultRow[] = grid.map((g, gridPos) => {
+    const rows: (RaceResultRow & { score: number })[] = grid.map((g, gridPos) => {
       const isPlayer = g.isPlayer;
       const driverIdx = isPlayer ? game.drivers.findIndex((d) => d.id === g.id) : -1;
       const driver = isPlayer ? game.drivers[driverIdx] : game.rivals.flatMap((r) => r.drivers).find((d) => d.id === g.id)!;
       const rating = isPlayer ? carPerf : game.rivals.find((r) => r.name === g.team)!.carRating;
       const reliability = isPlayer ? game.carStats.reliability : rating;
-      const compound: Compound = isPlayer ? tyres[driverIdx] : (["Soft", "Medium", "Hard"] as Compound[])[Math.floor(Math.random() * 3)];
+      const compound: Compound = isPlayer ? tyres[driverIdx] : availableCompounds[Math.floor(Math.random() * availableCompounds.length)];
       const tyreMgmt = driver.stats.tyreManagement;
       const degradation = COMPOUND_DEGRADATION[compound] * (1 - tyreMgmt / 150);
       const consistencyVariance = ((100 - driver.stats.consistency) / 100) * rand(-10, 10);
       const pitBonus = safetyCar ? (isPlayer ? (pitCalls[driverIdx] ? 4 : -4) : Math.random() < 0.6 ? 3 : -3) : 0;
       const gridBonus = (20 - gridPos) * 0.4;
+      const moraleFactor = isPlayer ? 0.92 + (driver.morale / 100) * 0.16 : 1;
       const dnfChance = (100 - reliability) * 0.12;
       const dnf = Math.random() * 100 < dnfChance;
-      const score = dnf ? -999 + Math.random() : rating * 0.4 + driver.stats.pace * 0.3 + gridBonus + COMPOUND_PACE[compound] + degradation + consistencyVariance + pitBonus;
-      return { driverId: g.id, driverName: g.name, team: g.team, position: 0, points: 0, dnf, isPlayer, score } as RaceResultRow & { score: number };
+      const score = dnf ? -999 + Math.random() : (rating * 0.4 + driver.stats.pace * 0.3 + gridBonus + COMPOUND_PACE[compound] + degradation + consistencyVariance + pitBonus) * moraleFactor;
+      return { driverId: g.id, driverName: g.name, team: g.team, position: 0, points: 0, dnf, isPlayer, score };
     });
-    rows.sort((a: any, b: any) => b.score - a.score);
+    rows.sort((a, b) => b.score - a.score);
     rows.forEach((r, i) => {
       r.position = i + 1;
       r.points = POINTS_TABLE[i] ?? 0;
     });
 
     const winner = rows[0];
-    setHeadline(safetyCar ? `Safety Car flew mid-race — ${winner.team}'s ${winner.driverName} held on to win at ${track.name}.` : `Lights to flag pace from ${winner.driverName} — victory for ${winner.team} at ${track.name}.`);
+    setHeadline(safetyCar ? `Safety Car flew mid-race in ${WEATHER_META[weather].label.toLowerCase()} conditions — ${winner.team}'s ${winner.driverName} held on to win at ${track.name}.` : `${WEATHER_META[weather].label} race, lights-to-flag pace from ${winner.driverName} — victory for ${winner.team} at ${track.name}.`);
     setResults(rows);
 
     const newDriverStandings = { ...game.driverStandings };
@@ -731,6 +976,23 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
     const prize = playerRows.reduce((sum, r) => sum + (11 - Math.min(r.position, 11)), 0);
     const rd = playerRows.reduce((sum, r) => sum + (r.dnf ? 2 : 6 - Math.min(Math.floor(r.position / 4), 4)), 0);
 
+    // Update morale & contracts for player drivers based on how the weekend went.
+    const updatedDrivers = game.drivers.map((d, i) => {
+      const row = playerRows[i];
+      let moraleDelta = 0;
+      if (row.dnf) moraleDelta = -10;
+      else if (row.position <= 3) moraleDelta = 8;
+      else if (row.position <= 6) moraleDelta = 3;
+      else if (row.position > 10) moraleDelta = -4;
+      const nextContract = d.contractRounds - 1;
+      const contractPenalty = nextContract < 0 ? -3 : 0;
+      return { ...d, morale: clamp(d.morale + moraleDelta + contractPenalty, 0, 100), contractRounds: nextContract };
+    }) as [DriverInfo, DriverInfo];
+
+    const contractNews = updatedDrivers
+      .filter((d) => d.contractRounds === 0)
+      .map((d) => `${d.name}'s contract has expired — renew it from the Driver Market before morale slides further.`);
+
     const calendar = game.calendar.map((c, i) => (i === game.roundIndex ? { ...c, completed: true } : c));
 
     setGame({
@@ -741,6 +1003,8 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
       constructorStandings: newConstructorStandings,
       calendar,
       roundIndex: Math.min(game.roundIndex + 1, game.calendar.length),
+      drivers: updatedDrivers,
+      lastNews: contractNews[0] ?? "",
     });
     setStage("results");
   }
@@ -751,7 +1015,11 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
 
       {stage === "briefing" && (
         <div className="flex flex-col items-center text-center gap-5 py-4">
+          <TrackShape trackId={track.id} accent={PALETTE.brick} className="w-28 h-28" />
           <Mascot accent={game.livery.colors[0]} />
+          <div className={`${mono.className} text-xs uppercase tracking-widest px-3 py-2 rounded`} style={{ background: `${WEATHER_META[weather].accent}22`, color: WEATHER_META[weather].accent, border: `1px solid ${WEATHER_META[weather].accent}` }}>
+            Forecast: {WEATHER_META[weather].label} — {WEATHER_META[weather].blurb}
+          </div>
           <p className={`${workSans.className} text-base`}>{track.country} · {track.laps} laps. Send the cars out for Qualifying.</p>
           <button onClick={runQualifying} className={`${mono.className} uppercase tracking-widest text-sm px-6 py-4 rounded-md`} style={{ background: PALETTE.green, color: PALETTE.parchment }}>
             Start Qualifying ▸
@@ -777,16 +1045,19 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
 
       {stage === "strategy" && (
         <div>
-          <h3 className={`${bebas.className} text-2xl uppercase mb-4`}>Tyre Strategy</h3>
+          <h3 className={`${bebas.className} text-2xl uppercase mb-2`}>Tyre Strategy</h3>
+          <p className={`${mono.className} text-xs uppercase tracking-widest mb-4`} style={{ color: WEATHER_META[weather].accent }}>
+            {WEATHER_META[weather].label} track — {WEATHER_META[weather].blurb}
+          </p>
           {game.drivers.map((d, i) => (
             <div key={d.id} className="mb-6">
               <span className={`${bebas.className} text-lg uppercase block mb-2`}>{d.name}</span>
-              <div className="flex gap-2">
-                {(["Soft", "Medium", "Hard"] as Compound[]).map((c) => (
+              <div className="flex gap-2 flex-wrap">
+                {availableCompounds.map((c) => (
                   <button
                     key={c}
                     onClick={() => setTyres((prev) => { const next = [...prev] as [Compound, Compound]; next[i] = c; return next; })}
-                    className={`${workSans.className} flex-1 rounded-md border px-3 py-3 text-sm`}
+                    className={`${workSans.className} flex-1 min-w-[5rem] rounded-md border px-3 py-3 text-sm`}
                     style={{ borderColor: PALETTE.ink, borderWidth: tyres[i] === c ? 3 : 1, background: tyres[i] === c ? PALETTE.ink : PALETTE.parchment, color: tyres[i] === c ? PALETTE.parchment : PALETTE.ink }}
                   >
                     {c}
@@ -795,7 +1066,9 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
               </div>
             </div>
           ))}
-          <p className={`${workSans.className} text-xs mb-6`} style={{ color: `${PALETTE.ink}88` }}>Soft is fastest but degrades quickly; Hard lasts longest but qualifies slower.</p>
+          <p className={`${workSans.className} text-xs mb-6`} style={{ color: `${PALETTE.ink}88` }}>
+            Softer/wetter compounds are quicker over one lap but degrade faster; harder/drier compounds last longer but qualify slower.
+          </p>
           <button onClick={() => setStage(safetyCar ? "safetyCar" : "racing")} className={`${mono.className} w-full uppercase tracking-widest text-sm py-4 rounded-md`} style={{ background: PALETTE.brick, color: PALETTE.parchment }}>
             Lights Out ▸
           </button>
@@ -828,9 +1101,10 @@ function RaceWeekendScreen({ game, setGame, onDone }: { game: GameState; setGame
       )}
 
       {stage === "racing" && (
-        <div className="flex flex-col items-center text-center gap-5 py-8">
+        <div className="flex flex-col items-center text-center gap-5 py-4">
           <Mascot excited accent={game.livery.colors[0]} />
           <p className={`${workSans.className} text-base`}>Green flag out at {track.name}...</p>
+          <TelemetryPanel drivers={game.drivers} tyres={tyres} weather={weather} />
           <button onClick={finalizeRace} className={`${mono.className} uppercase tracking-widest text-sm px-6 py-4 rounded-md`} style={{ background: PALETTE.brick, color: PALETTE.parchment }}>
             Take the Chequered Flag ▸
           </button>
@@ -864,7 +1138,21 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("menu");
   const [wiping, setWiping] = useState(false);
   const [game, setGame] = useState<GameState | null>(null);
+  const [saveLoaded, setSaveLoaded] = useState(false);
   const pendingScreen = useRef<Screen>("menu");
+
+  // Load any existing save once, on mount.
+  useEffect(() => {
+    const saved = loadSave();
+    if (saved) setGame(saved);
+    setSaveLoaded(true);
+  }, []);
+
+  // Persist to localStorage every time the game state changes (real, cross-session persistence).
+  useEffect(() => {
+    if (!saveLoaded) return;
+    persistSave(game);
+  }, [game, saveLoaded]);
 
   const go = (next: Screen) => {
     pendingScreen.current = next;
@@ -875,14 +1163,14 @@ export default function Home() {
     }, 260);
   };
 
-  function startCareer(teamName: string, livery: Livery, logo: string) {
-    const starters = DRIVER_POOL.filter((d) => STARTER_DRIVER_IDS.includes(d.id)) as [DriverInfo, DriverInfo];
+  function startCareer(teamName: string, livery: Livery, emblemId: string) {
+    const starters = DRIVER_POOL.filter((d) => STARTER_DRIVER_IDS.includes(d.id)).map((d) => ({ ...d, contractRounds: 6, morale: 70 })) as [DriverInfo, DriverInfo];
     const rivals = generateRivals();
-    const calendar: RoundRecord[] = TRACKS.map((t) => ({ track: t, completed: false }));
+    const calendar: RoundRecord[] = TRACKS.map((t) => ({ track: t, completed: false, weather: randomWeather() }));
     setGame({
       teamName,
       livery,
-      logo,
+      logo: emblemId,
       budget: 40,
       rdPoints: 0,
       carStats: { aero: 40, powerUnit: 40, reliability: 40 },
@@ -892,8 +1180,15 @@ export default function Home() {
       roundIndex: 0,
       driverStandings: {},
       constructorStandings: {},
+      lastNews: "",
     });
     go("hub");
+  }
+
+  function resetSave() {
+    persistSave(null);
+    setGame(null);
+    go("menu");
   }
 
   return (
@@ -914,7 +1209,7 @@ export default function Home() {
         {screen === "continue" && (
           <ContinueScreen onBack={() => go("menu")} onNewCareer={() => go("newCareer")} onResume={() => go("hub")} hasSave={!!game} teamName={game?.teamName} />
         )}
-        {screen === "settings" && <SettingsScreen onBack={() => go("menu")} />}
+        {screen === "settings" && <SettingsScreen onBack={() => go("menu")} onResetSave={resetSave} />}
         {screen === "hub" && game && <HubScreen game={game} setGame={setGame} onExit={() => go("menu")} onEnterRace={() => go("raceWeekend")} />}
         {screen === "raceWeekend" && game && <RaceWeekendScreen game={game} setGame={setGame} onDone={() => go("hub")} />}
       </div>
