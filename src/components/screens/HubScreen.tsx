@@ -10,7 +10,13 @@ import { PALETTE } from "@/lib/theme";
 import { WEATHER_META, DRIVER_POOL } from "@/lib/data";
 import { clamp, moraleColor } from "@/lib/gameLogic";
 import { upgradeCost } from "@/lib/gameLogic";
-import type { GameState, HubTab, DriverInfo, CarStats } from "@/lib/types";
+import type {
+  GameState,
+  HubTab,
+  DriverInfo,
+  RivalTeam,
+  CarStats,
+} from "@/lib/types";
 
 export function HubScreen({
   game,
@@ -47,10 +53,10 @@ export function HubScreen({
   const drivers = [...game.drivers] as [DriverInfo, DriverInfo];
 
   // Find which rival team currently owns this driver
-  const rivals = game.rivals.map((team) => ({
-    ...team,
-    drivers: [...team.drivers],
-  }));
+  const rivals: RivalTeam[] = game.rivals.map((team) => ({
+  ...team,
+  drivers: [...team.drivers] as [DriverInfo, DriverInfo],
+}));
 
   for (const team of rivals) {
     const index = team.drivers.findIndex((d) => d.name === candidate.name);

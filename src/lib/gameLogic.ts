@@ -42,10 +42,10 @@ export function generateRivals(): RivalTeam[] {
     };
 
     return {
-      name: team.name,
-      carRating: team.rating,
-      drivers: [makeDriver(), makeDriver()],
-    };
+  name: team.name,
+  carRating: team.rating,
+  drivers: [makeDriver(), makeDriver()] as [DriverInfo, DriverInfo],
+};
   });
 }
 
